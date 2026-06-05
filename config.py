@@ -3,7 +3,7 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql://user:password@localhost:5432/ibovespa"
+    database_url: str = "sqlite:///./ibovespa_local.db"
     playwright_timeout: int = 30000
     log_level: str = "INFO"
     

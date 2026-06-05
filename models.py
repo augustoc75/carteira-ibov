@@ -1,5 +1,4 @@
 from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Index
-from sqlalchemy.dialects.postgresql import UUID
 import uuid
 from datetime import datetime
 from database import Base
@@ -8,7 +7,7 @@ from database import Base
 class SnapshotExecution(Base):
     __tablename__ = "snapshot_executions"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     status = Column(String(50), default="started")
     error_message = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -18,7 +17,7 @@ class SnapshotExecution(Base):
 class CarteiraIbovespa(Base):
     __tablename__ = "carteira_ibovespa"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     data_pregao = Column(Date, nullable=False, index=True)
     codigo = Column(String(10), nullable=False)
     acao = Column(String(100), nullable=False)

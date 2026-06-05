@@ -1,6 +1,7 @@
 import asyncio
 import tempfile
 import os
+from io import StringIO
 from pathlib import Path
 from datetime import datetime, date
 import logging
@@ -87,11 +88,25 @@ def clean_and_process_csv(csv_path: str, data_pregao: date = None) -> pd.DataFra
         data_pregao = date.today()
 
     logger.info(f"Lendo CSV: {csv_path}")
-    
+
     try:
-        df = pd.read_csv(csv_path, encoding='utf-8')
+        with open(csv_path, 'r', encoding='latin-1', newline='') as f:
+            lines = [line.strip() for line in f if line.strip()]
+
+        if ';' not in lines[0]:
+            lines = lines[1:]
+
+        normalized_lines = [line.rstrip(';') for line in lines]
+        df = pd.read_csv(StringIO('\n'.join(normalized_lines)), sep=';', encoding='latin-1')
     except UnicodeDecodeError:
-        df = pd.read_csv(csv_path, encoding='latin-1')
+        with open(csv_path, 'r', encoding='utf-8', newline='') as f:
+            lines = [line.strip() for line in f if line.strip()]
+
+        if ';' not in lines[0]:
+            lines = lines[1:]
+
+        normalized_lines = [line.rstrip(';') for line in lines]
+        df = pd.read_csv(StringIO('\n'.join(normalized_lines)), sep=';', encoding='utf-8')
 
     logger.info(f"Shape inicial: {df.shape}")
     logger.info(f"Colunas: {df.columns.tolist()}")
@@ -102,10 +117,10 @@ def clean_and_process_csv(csv_path: str, data_pregao: date = None) -> pd.DataFra
     # Limpar espaços em branco nos nomes das colunas
     df.columns = df.columns.str.strip()
 
-    # Remover linhas que parecem ser cabeçalhos ou rodapés
+    # Remover linhas que parecem ser cabeçalhos, sumários ou rodapés
     if 'Código' in df.columns:
         df = df[df['Código'].notna()]
-        df = df[~df['Código'].str.contains('Código', case=False, na=False)]
+        df = df[~df['Código'].astype(str).str.contains('Código|Quantidade Teórica Total|Redutor', case=False, na=False)]
 
     # Mapear possíveis nomes de colunas para um padrão
     column_mapping = {

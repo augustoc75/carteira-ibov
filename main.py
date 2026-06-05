@@ -67,7 +67,7 @@ async def trigger_snapshot_endpoint(
     try:
         # Criar registro de execução
         execution_id = uuid.uuid4()
-        execution = SnapshotExecution(id=execution_id, status="started")
+        execution = SnapshotExecution(id=str(execution_id), status="started")
         db.add(execution)
         db.commit()
         db.refresh(execution)
@@ -104,7 +104,7 @@ async def _run_snapshot_task(execution_id: uuid.UUID):
 
         # Atualizar execução
         execution = db.query(SnapshotExecution).filter(
-            SnapshotExecution.id == execution_id
+            SnapshotExecution.id == str(execution_id)
         ).first()
 
         if execution:
@@ -118,7 +118,7 @@ async def _run_snapshot_task(execution_id: uuid.UUID):
 
         # Atualizar execução com erro
         execution = db.query(SnapshotExecution).filter(
-            SnapshotExecution.id == execution_id
+            SnapshotExecution.id == str(execution_id)
         ).first()
 
         if execution:
