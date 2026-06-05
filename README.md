@@ -7,3 +7,4 @@ A B3 divulga antes de cada pregão a composição da carteiras teóricas dos ín
 A ideia consiste em rodar a automação nos dias úteis, de segunda a sexta-feira, antes do início de cada pregão. O código do projeto pode rodar tanto em um servidor local quanto em um container de uma aplicação serverless em uma plataforma de nuvem. Para fins didáticos escolhi a GCP.
 
 ATENÇÃO: as dependências estão ajustadas para a versão 3.12 do Python
+A codificação fo realizada com auxílio do Github Copilot usando o modelo Claude Haiku 4.5
