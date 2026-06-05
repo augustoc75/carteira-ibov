@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, func
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Index
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 from datetime import datetime
@@ -29,8 +29,5 @@ class CarteiraIbovespa(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (
-        # Índice composto para garantir unicidade por data
-        {"indexes": [
-            {"unique": True, "columns": ["data_pregao", "codigo"]},
-        ]},
+        Index('ix_carteira_ibovespa_data_pregao_codigo', 'data_pregao', 'codigo', unique=True),
     )

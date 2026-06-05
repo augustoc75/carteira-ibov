@@ -31,7 +31,7 @@ async def download_csv_from_b3(timeout: int = None) -> str:
         async with async_playwright() as p:
             logger.info("Iniciando Playwright (headless)...")
             browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context()
+            context = await browser.new_context(accept_downloads=True)
             
             # Interceptar downloads
             page = await context.new_page()
@@ -50,15 +50,22 @@ async def download_csv_from_b3(timeout: int = None) -> str:
             # Aguardar a renderização da página
             await page.wait_for_timeout(2000)
 
-            # Localizar e clicar no botão de download do CSV
-            logger.info("Procurando botão de download...")
-            download_button = page.locator('a[href*=".csv"], button:has-text("Download")')
-            
+            # O conteúdo real da carteira está dentro de um iframe da B3.
+            logger.info("Procurando botão de download no iframe da B3...")
+            iframe_locator = page.frame_locator('iframe').first
+            download_button = iframe_locator.get_by_role("link", name="Download")
+
             if await download_button.count() > 0:
                 await download_button.first.click()
                 await page.wait_for_timeout(3000)  # Aguardar download
             else:
-                raise Exception("Botão de download não encontrado")
+                # Fallback para links de download que possam aparecer na página principal
+                download_button = page.locator('a:has-text("Download")')
+                if await download_button.count() > 0:
+                    await download_button.first.click()
+                    await page.wait_for_timeout(3000)
+                else:
+                    raise Exception("Botão de download não encontrado")
 
             await browser.close()
 
