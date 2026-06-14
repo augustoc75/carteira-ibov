@@ -1,11 +1,13 @@
 import asyncio
 import tempfile
 import os
+import shutil
 from io import StringIO
 from pathlib import Path
 from datetime import datetime, date
 import logging
 import pandas as pd
+from google.cloud import storage
 from playwright.async_api import async_playwright
 from sqlalchemy.orm import Session
 from models import CarteiraIbovespa
@@ -207,34 +209,48 @@ def save_to_database(df: pd.DataFrame, db: Session) -> int:
     return count
 
 
+def upload_to_gcs(local_file_path: str, bucket_name: str, destination_blob_name: str):
+    """
+    Faz o upload de um arquivo para o Google Cloud Storage.
+    O GCS sobrescreve o arquivo automaticamente se já existir.
+    """
+    logger.info(f"Fazendo upload para gs://{bucket_name}/{destination_blob_name}")
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(destination_blob_name)
+    blob.upload_from_filename(local_file_path)
+    logger.info("Upload concluído com sucesso")
+
+
 async def trigger_snapshot(db: Session) -> dict:
     """
     Função principal que orquestra todo o processo:
-    1. Download do CSV via Playwright
-    2. Limpeza e processamento com Pandas
-    3. Salvamento no banco de dados
+    1. Download do CSV via Playwright (Extração)
+    2. Upload do arquivo bruto para o GCS
     """
     try:
-        logger.info("=== Iniciando snapshot da carteira Ibovespa ===")
+        logger.info("=== Iniciando extração da carteira Ibovespa ===")
         
         csv_path = await download_csv_from_b3()
-        logger.info(f"CSV obtido: {csv_path}")
-        
-        df = clean_and_process_csv(csv_path)
-        logger.info(f"CSV processado: {len(df)} registros")
-        
-        count = save_to_database(df, db)
-        logger.info(f"Snapshot concluído com sucesso: {count} registros")
+        filename = os.path.basename(csv_path)
+        destination_blob_name = f"{settings.gcs_folder}/{filename}"
+
+        # Upload para o GCS
+        upload_to_gcs(
+            local_file_path=csv_path,
+            bucket_name=settings.gcs_bucket_name,
+            destination_blob_name=destination_blob_name
+        )
         
         # Limpar arquivo temporário
         try:
-            os.remove(csv_path)
+            shutil.rmtree(os.path.dirname(csv_path))
         except:
             pass
 
         return {
             "status": "success",
-            "registros_processados": count,
+            "gcs_path": f"gs://{settings.gcs_bucket_name}/{destination_blob_name}",
             "timestamp": datetime.utcnow().isoformat(),
         }
 

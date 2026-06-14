@@ -1,30 +1,31 @@
 FROM python:3.12-slim
 
+# Configurações para Python não gerar arquivos .pyc e não bufferizar logs
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PORT=8080
+
 WORKDIR /app
 
-# Instalar dependências do sistema necessárias para Playwright
-RUN apt-get update && apt-get install -y \
+# Instalar dependências do sistema
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar requirements e instalar dependências Python
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
-# Instalar browsers do Playwright
-RUN playwright install chromium \
-    && playwright install-deps
+# Instala dependências Python e as dependências de sistema do Chromium em uma única camada
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt \
+    && playwright install chromium --with-deps \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copiar código da aplicação
 COPY . .
 
-# Expor porta
-EXPOSE 8000
+# O Cloud Run ignora o HEALTHCHECK do Dockerfile, pois usa Probes próprias, 
+# mas mantemos a exposição da porta 8080 (padrão do Cloud Run)
+EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
-
-# Comando para rodar a aplicação
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# No Cloud Run, o app DEVE ouvir na porta definida pela variável $PORT
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT}"]

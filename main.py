@@ -54,13 +54,12 @@ async def trigger_snapshot_endpoint(
     db: Session = Depends(get_db),
 ):
     """
-    Dispara o processo de captura e processamento da carteira Ibovespa.
+    Dispara o processo de extração da carteira Ibovespa e upload para GCS.
     
     O processo:
     1. Acessa a página da B3 via Playwright (headless)
     2. Faz download do CSV da carteira
-    3. Processa e limpa os dados com Pandas
-    4. Salva no banco de dados relacional
+    3. Upload para o Google Cloud Storage (pasta comp-ibov)
     
     Retorna ID de rastreamento da execução.
     """
