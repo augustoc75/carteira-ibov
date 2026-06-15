@@ -9,8 +9,6 @@ import logging
 import pandas as pd
 from google.cloud import storage
 from playwright.async_api import async_playwright
-from sqlalchemy.orm import Session
-from models import CarteiraIbovespa
 from config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -82,133 +80,6 @@ async def download_csv_from_b3(timeout: int = None) -> str:
     return csv_path
 
 
-def clean_and_process_csv(csv_path: str, data_pregao: date = None) -> pd.DataFrame:
-    """
-    Lê o CSV, remove cabeçalhos/rodapés indesejados e adiciona coluna data_pregao.
-    """
-    if data_pregao is None:
-        data_pregao = date.today()
-
-    logger.info(f"Lendo CSV: {csv_path}")
-
-    try:
-        with open(csv_path, 'r', encoding='latin-1', newline='') as f:
-            lines = [line.strip() for line in f if line.strip()]
-
-        if ';' not in lines[0]:
-            lines = lines[1:]
-
-        normalized_lines = [line.rstrip(';') for line in lines]
-        df = pd.read_csv(StringIO('\n'.join(normalized_lines)), sep=';', encoding='latin-1')
-    except UnicodeDecodeError:
-        with open(csv_path, 'r', encoding='utf-8', newline='') as f:
-            lines = [line.strip() for line in f if line.strip()]
-
-        if ';' not in lines[0]:
-            lines = lines[1:]
-
-        normalized_lines = [line.rstrip(';') for line in lines]
-        df = pd.read_csv(StringIO('\n'.join(normalized_lines)), sep=';', encoding='utf-8')
-
-    logger.info(f"Shape inicial: {df.shape}")
-    logger.info(f"Colunas: {df.columns.tolist()}")
-
-    # Remover linhas vazias e cabeçalhos duplicados
-    df = df.dropna(how='all')
-    
-    # Limpar espaços em branco nos nomes das colunas
-    df.columns = df.columns.str.strip()
-
-    # Remover linhas que parecem ser cabeçalhos, sumários ou rodapés
-    if 'Código' in df.columns:
-        df = df[df['Código'].notna()]
-        df = df[~df['Código'].astype(str).str.contains('Código|Quantidade Teórica Total|Redutor', case=False, na=False)]
-
-    # Mapear possíveis nomes de colunas para um padrão
-    column_mapping = {
-        'Código': 'codigo',
-        'Code': 'codigo',
-        'Ação': 'acao',
-        'Asset': 'acao',
-        'Asset Name': 'acao',
-        'Tipo': 'tipo',
-        'Type': 'tipo',
-        'Qtde. Teórica': 'quantidade',
-        'Quantity': 'quantidade',
-        'Part. (%)': 'participacao',
-        'Participation (%)': 'participacao',
-    }
-
-    # Renomear colunas que existem
-    rename_dict = {k: v for k, v in column_mapping.items() if k in df.columns}
-    df.rename(columns=rename_dict, inplace=True)
-
-    # Adicionar coluna data_pregao
-    df['data_pregao'] = data_pregao
-
-    # Limpar valores numéricos
-    if 'quantidade' in df.columns:
-        df['quantidade'] = pd.to_numeric(df['quantidade'].astype(str).str.replace('.', '').str.replace(',', '.'), errors='coerce').fillna(0).astype(int)
-    
-    if 'participacao' in df.columns:
-        df['participacao'] = pd.to_numeric(df['participacao'].astype(str).str.replace(',', '.'), errors='coerce')
-
-    # Manter apenas colunas necessárias
-    colunas_necessarias = ['data_pregao', 'codigo', 'acao', 'tipo', 'quantidade', 'participacao']
-    df = df[[col for col in colunas_necessarias if col in df.columns]]
-
-    logger.info(f"Shape final: {df.shape}")
-    logger.info(f"Amostra dos dados:\n{df.head()}")
-
-    return df
-
-
-def save_to_database(df: pd.DataFrame, db: Session) -> int:
-    """
-    Salva os dados do DataFrame no banco de dados.
-    Retorna o número de registros inseridos.
-    """
-    logger.info(f"Salvando {len(df)} registros no banco de dados...")
-
-    count = 0
-    for _, row in df.iterrows():
-        try:
-            # Verificar se já existe registro para esse código na mesma data
-            existing = db.query(CarteiraIbovespa).filter(
-                CarteiraIbovespa.data_pregao == row['data_pregao'],
-                CarteiraIbovespa.codigo == row['codigo']
-            ).first()
-
-            if existing:
-                # Atualizar se já existe
-                existing.acao = row.get('acao')
-                existing.tipo = row.get('tipo')
-                existing.quantidade = row.get('quantidade', 0)
-                existing.participacao = row.get('participacao')
-            else:
-                # Criar novo registro
-                novo_registro = CarteiraIbovespa(
-                    data_pregao=row['data_pregao'],
-                    codigo=row['codigo'],
-                    acao=row.get('acao', ''),
-                    tipo=row.get('tipo'),
-                    quantidade=int(row.get('quantidade', 0)),
-                    participacao=row.get('participacao'),
-                )
-                db.add(novo_registro)
-
-            count += 1
-
-        except Exception as e:
-            logger.error(f"Erro ao processar linha {count}: {str(e)}")
-            db.rollback()
-            raise
-
-    db.commit()
-    logger.info(f"{count} registros salvos com sucesso")
-    return count
-
-
 def upload_to_gcs(local_file_path: str, bucket_name: str, destination_blob_name: str):
     """
     Faz o upload de um arquivo para o Google Cloud Storage.
@@ -222,7 +93,7 @@ def upload_to_gcs(local_file_path: str, bucket_name: str, destination_blob_name:
     logger.info("Upload concluído com sucesso")
 
 
-async def trigger_snapshot(db: Session) -> dict:
+async def trigger_snapshot() -> dict:
     """
     Função principal que orquestra todo o processo:
     1. Download do CSV via Playwright (Extração)
