@@ -7,6 +7,7 @@ from database import engine, get_db, Base
 from models import SnapshotExecution
 from playwright_scraper import trigger_snapshot
 import uuid
+import os
 
 # Configurar logging
 logging.basicConfig(
@@ -208,10 +209,12 @@ async def get_carteira(
 
 if __name__ == "__main__":
     import uvicorn
+    # Cloud Run dynamic port or default to 8000
+    port = int(os.environ.get("PORT", 8000))
 
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8000,
+        port=port,
         reload=False,
     )
