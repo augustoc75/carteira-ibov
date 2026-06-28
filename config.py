@@ -3,7 +3,7 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
-    playwright_timeout: int = 30000
+    playwright_timeout: int = 60000
     log_level: str = "INFO"
     gcs_bucket_name: str = "dadosb3"
     gcs_folder: str = "comp-ibov"
